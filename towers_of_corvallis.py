@@ -1,42 +1,45 @@
 import sys, os, math, numpy as np
+#
+# class Nodes: #Class wrapper to make lists hashable
+#     def __init__(self, node):
+#         self.node = node
 
-class Nodes: #Class wrapper to make lists hashable
-    def __init__(self, node):
-        self.node = node
+
+num_discs = 7
+nmax = 100000
+is_admissible = 1
 
 
 class Tower_Of_Corvallis:
-    def __init__(self, num_discs, initial_config):
-        self.num_discs = num_discs; self.initial_config = initial_config
-        #self.state = [initial_config[:], [], []] #Pegs configuration
+    def __init__(self, initial_config):
+        self.initial_config = initial_config
+
+    def to_tuple(self, l): return (tuple(elm) for elm in l)
+
+    def to_list(self, t): return [list(elm) for elm in t]
+
+    def get_top_elm(self, lst):
+        if len(lst) == 0: return []
+        else: return [lst[0]]
 
     def get_nbrs(self, node):
-        state = node.node
         nbrs = []
 
-        ig = [i[:] for i in state]
-        if len(ig[0]) > 0:
-            disc_move = ig[0].pop()
-            ig[1].append(disc_move)
-            nbrs.append(Nodes(ig[:]))
+        #First
+        temp_node = self.to_list(node)
+        nbrs.append((tuple(temp_node[0][1:]), tuple(self.get_top_elm(temp_node[0]) + temp_node[1]), tuple(temp_node[2])))
 
-        ig = [i[:] for i in state]
-        if len(ig[1]) > 0:
-            disc_move = ig[1].pop()
-            ig[0].append(disc_move)
-            nbrs.append(Nodes(ig[:]))
+        #Second
+        temp_node = self.to_list(node)
+        nbrs.append((tuple(self.get_top_elm(temp_node[1]) + temp_node[0]), tuple(temp_node[1][1:]), tuple(temp_node[2])))
 
-        ig = [i[:] for i in state]
-        if len(ig[1]) > 0:
-            disc_move = ig[1].pop()
-            ig[2].append(disc_move)
-            nbrs.append(Nodes(ig[:]))
+        #third
+        temp_node = self.to_list(node)
+        nbrs.append((tuple(temp_node[0]), tuple(temp_node[1][1:]), tuple(self.get_top_elm(temp_node[1]) + temp_node[2])))
 
-        ig = [i[:] for i in state]
-        if len(ig[2]) > 0:
-            disc_move = ig[2].pop()
-            ig[1].append(disc_move)
-            nbrs.append(Nodes(ig[:]))
+        #Fourth
+        temp_node = self.to_list(node)
+        nbrs.append((tuple(temp_node[0]), tuple(self.get_top_elm(temp_node[2]) + temp_node[1]), tuple(temp_node[2][1:])))
 
         return nbrs
 
@@ -46,7 +49,24 @@ class Astar:
     def __init__(self):
         pass
 
-    def compute_heuristic(self, a, b): return 0
+    def compute_heuristic(self, node, goal):
+        if is_admissible: #Admissible heuristic
+            cost = 0.0
+            first_peg = node[0]
+            for i, disc in enumerate(first_peg):
+                for num in first_peg[i+1:]:
+                    if disc > num: cost += 1
+
+            #len
+            cost += len(node[1]) + len(node[2])
+
+            return cost
+
+
+
+        else: #Non-admissible heuristic
+            return 0
+
 
     def start_search(self, nmax, start, goal, task):
         #Containers
@@ -65,10 +85,16 @@ class Astar:
             open_set.sort()
             current_f, node = open_set.pop(0)
 
-            if goal == node.node:
-                print 'GOAL FOUND'
-                print node.node
-                break #If goal return goal
+            if goal == node:
+                #print 'GOAL FOUND'
+                # Backpropagate path
+                soln = [node]
+                while node != start:
+                    node = back_node[node]
+                    soln.append(node)
+                soln.reverse()
+                return soln, step+1
+
 
             closed_set.add(node)
 
@@ -88,17 +114,8 @@ class Astar:
                     h_score[nbr] = self.compute_heuristic(nbr, goal)
                     open_set.append((g_score[nbr] + h_score[nbr], nbr))
 
-            print 'Step', step, 'Node', node.node
-
-
-        #Backpropagate path
-        soln = [node.node]
-        while node!= start:
-            node = back_node[node]
-            soln.append(node.node)
-        return soln
-
-
+            #print 'Step', step, 'Node', node
+        return None, step
 
 
 def data_io(filename):
@@ -106,26 +123,30 @@ def data_io(filename):
     for i, line in enumerate(open(filename)):
         if i == 0: continue
         line = line.strip('\n')
-        starts.append([[], [], []])
-        for char in line:
-            starts[-1][0].append(int(char))
+
+        num = []
+        for char in line: num.append(int(char))
+        starts.append(((tuple(num)), (), ()))
     starts.pop(-1)
     return starts
 
+def get_goal(num_discs):
+    state = [i for i in range(num_discs)]
+    state.reverse()
+    return ((tuple(state), (), ()))
 
 
 
-
-all_starts = data_io('perms-4.txt')
+all_starts = data_io('perms-' + str(num_discs) + '.txt')
 for start in all_starts:
-    start = Nodes(start)
-    goal = [[1,2,3,4], [], []]
-
-    task = Tower_Of_Corvallis(3, start)
+    start = start; goal = get_goal(num_discs)
+    task = Tower_Of_Corvallis(start)
     agent = Astar()
-    soln = agent.start_search(100000, start, goal, task)
-
-    print soln
+    soln, steps = agent.start_search(nmax, start, goal, task)
+    if soln: #Goal found
+        print 'Goal found in', steps, 'steps. Soln = ', soln
+    else:
+        print 'Failed'
 
 
 
